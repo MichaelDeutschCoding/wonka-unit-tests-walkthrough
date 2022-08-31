@@ -22,25 +22,24 @@ internal class CustomerValidator : ICustomerValidator
             throw new InvalidCustomerDataException($"Customer must provide a {nameof(customer.FirstName)}.");
 
         if (string.IsNullOrWhiteSpace(customer.LastName))
-            throw new InvalidCustomerDataException($"Customer must provide a {nameof(customer.FirstName)}.");
+            throw new InvalidCustomerDataException($"Customer must provide a {nameof(customer.LastName)}.");
 
-        if (customer.Age <= MIN_AGE)
+        if (customer.Age < MIN_AGE)
             throw new InvalidCustomerDataException($"Customer must be at least {MIN_AGE} years old to register.");
 
         if (customer.Age > MAX_AGE)
             throw new InvalidCustomerDataException($"You can't actually be older than {MAX_AGE}! Please set your age to a more believable number ☺");
     }
 
-
     public void ValidateEmailAddress(string emailAddress, IEnumerable<string> otherEmailAddreses)
     {
-        if (_emailService.IsValidEmailAddress(emailAddress))
-            throw new InvalidCustomerDataException($"'{emailAddress}' is not a valid emailAddress address.");
+        if (!_emailService.IsValidEmailAddress(emailAddress))
+            throw new InvalidCustomerDataException($"'{emailAddress}' is not a valid email address.");
 
         bool hasOverlap = otherEmailAddreses
             .Any(otherEmail => otherEmail.Equals(emailAddress, StringComparison.OrdinalIgnoreCase));
 
         if (hasOverlap)
-            throw new InvalidCustomerDataException($"The provided emailAddress address '{emailAddress}' is already in use by another customer.");
+            throw new InvalidCustomerDataException($"The provided email address '{emailAddress}' is already in use by another customer.");
     }
 }

@@ -62,6 +62,7 @@ internal class CustomerManager : ICustomerManager
     {
         _validator.ValidateCustomerDetails(customer);
         var otherEmails = _customersDbAccess.GetCustomers()
+            .Where(cust => cust.Id != id)
             .Select(cust => cust.EmailAddress);
         _validator.ValidateEmailAddress(customer.EmailAddress, otherEmails);
 
@@ -85,7 +86,7 @@ internal class CustomerManager : ICustomerManager
         }
 
         var emailBody = $"Dear {customer.FirstName},\n\n\tWe're so sorry to see you leave.";
-        _emailService.SendEmail(emailBody, customer.EmailAddress);
+        _emailService.SendEmail(customer.EmailAddress, emailBody);
         _customersDbAccess.DeleteCustomer(customer);
 
         Console.WriteLine($"Deleted customer with ID: {id}.");
