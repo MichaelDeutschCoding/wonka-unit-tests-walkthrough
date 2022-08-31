@@ -147,4 +147,72 @@ public class CustomerManagerTests
         mockDb.Verify(db => db.GetCustomers(), Times.Once);
         mockDb.Verify(db => db.UpdateCustomer(id, customer), Times.Once);
     }
+
+    [Fact]
+    public void UpdateCustomer_Nonexistent_ShouldThrow_KeyNotFoundException()
+    {
+        // ARRANGE
+        var id = 99;
+        var email = "test@test.com";
+        var customer = new Customer
+        {
+            Id = id,
+            EmailAddress = email,
+        };
+
+        // ACT
+        void testCode() => sut.UpdateCustomer(id, customer);
+
+        // ASSERT
+        var ex = Assert.Throws<KeyNotFoundException>(testCode);
+        Assert.Contains("No customer was found", ex.Message);
+        Assert.Contains(id.ToString(), ex.Message);
+        mockDb.Verify(db => db.GetCustomers(), Times.Once);
+        mockDb.Verify(db => db.GetCustomer(id), Times.Once);
+        mockDb.Verify(db => db.UpdateCustomer(It.IsAny<int>(), It.IsAny<Customer>()), Times.Never);
+        mockValidator.Verify(v => v.ValidateCustomerDetails(customer), Times.Once);
+        mockValidator.Verify(v => v.ValidateEmailAddress(email, Enumerable.Empty<string>()), Times.Once);
+    }
+
+    [Fact]
+    public void DeleteCustomer_Exists_ShouldDeleteFromDB_AndSendEmail()
+    {
+        // ARRANGE
+        var id = 123;
+        var firstName = "Golda";
+        var email = "golda_meir@labour.gov";
+        var customer = new Customer
+        {
+            Id = id,
+            EmailAddress = email,
+            FirstName = firstName,
+        };
+        mockDb.Setup(db => db.GetCustomer(id)).Returns(customer);
+
+        // ACT
+        sut.DeleteCustomer(id);
+
+        // ASSERT
+        mockDb.Verify(db => db.DeleteCustomer(customer), Times.Once);
+        mockEmailService.Verify(
+            es => es.SendEmail(email, It.Is<string>(body => body.Contains(firstName) && body.Contains("sorry to see you leave"))),
+            Times.Once);
+    }
+
+    [Fact]
+    public void DeleteCustomer_Nonexistent_ShouldThrow_KeyNotFoundException()
+    {
+        // ARRANGE
+        var id = 99;
+
+        // ACT
+        void testCode() => sut.DeleteCustomer(id);
+
+        // ASSERT
+        var ex = Assert.Throws<KeyNotFoundException>(testCode);
+        Assert.Contains("No customer was found to delete", ex.Message);
+        Assert.Contains(id.ToString(), ex.Message);
+        mockDb.Verify(db => db.GetCustomer(id), Times.Once);
+        mockDb.VerifyNoOtherCalls();
+    }
 }
