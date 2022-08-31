@@ -1,22 +1,21 @@
 ﻿using Wonka.Customers.Email;
+using Wonka.Customers.Validators;
 using Wonka.Database;
 using Wonka.Models;
-using Wonka.Models.Exceptions;
 
 namespace Wonka.Customers;
 
 internal class CustomerManager : ICustomerManager
 {
-    public const int MIN_AGE = 18;
-    public const int MAX_AGE = 120;
-
     private readonly ICustomersDbAccess _customersDbAccess;
     private readonly IEmailService _emailService;
+    private readonly ICustomerValidator _validator;
 
-    public CustomerManager(ICustomersDbAccess customersDbAccess, IEmailService emailService)
+    public CustomerManager(ICustomersDbAccess customersDbAccess, IEmailService emailService, ICustomerValidator validator)
     {
         _customersDbAccess = customersDbAccess;
         _emailService = emailService;
+        _validator = validator;
     }
 
     public IEnumerable<Customer> GetAllCustomers()
@@ -42,10 +41,10 @@ internal class CustomerManager : ICustomerManager
 
     public Customer AddCustomer(Customer customer)
     {
-        ValidateCustomerDetails(customer);
+        _validator.ValidateCustomerDetails(customer);
         var otherEmails = _customersDbAccess.GetCustomers()
             .Select(cust => cust.EmailAddress);
-        VerifyNoOverlappingEmail(customer.EmailAddress, otherEmails);
+        _validator.ValidateEmailAddress(customer.EmailAddress, otherEmails);
 
         customer = _customersDbAccess.AddCustomer(customer);
 
@@ -61,10 +60,12 @@ internal class CustomerManager : ICustomerManager
 
     public Customer UpdateCustomer(int id, Customer customer)
     {
-        ValidateCustomerDetails(customer);
+        _validator.ValidateCustomerDetails(customer);
+        var otherEmails = _customersDbAccess.GetCustomers()
+            .Select(cust => cust.EmailAddress);
+        _validator.ValidateEmailAddress(customer.EmailAddress, otherEmails);
 
         var existingCustomer = _customersDbAccess.GetCustomer(id);
-
         if (existingCustomer is null)
         {
             throw new KeyNotFoundException($"No customer was found to update with ID: {id}.");
@@ -88,32 +89,5 @@ internal class CustomerManager : ICustomerManager
         _customersDbAccess.DeleteCustomer(customer);
 
         Console.WriteLine($"Deleted customer with ID: {id}.");
-    }
-
-    private void ValidateCustomerDetails(Customer customer)
-    {
-        if (string.IsNullOrWhiteSpace(customer.FirstName))
-            throw new InvalidCustomerDataException($"Customer must provide a {nameof(customer.FirstName)}.");
-
-        if (string.IsNullOrWhiteSpace(customer.LastName))
-            throw new InvalidCustomerDataException($"Customer must provide a {nameof(customer.FirstName)}.");
-
-        if (customer.Age <= MIN_AGE)
-            throw new InvalidCustomerDataException($"Customer must be at least {MIN_AGE} years old to register.");
-
-        if (customer.Age > MAX_AGE)
-            throw new InvalidCustomerDataException($"You can't actually be older than {MAX_AGE}! Please set your age to a more believable number ☺");
-
-        if (_emailService.IsValidEmailAddress(customer.EmailAddress))
-            throw new InvalidCustomerDataException($"'{customer.EmailAddress}' is not a valid email address.");
-    }
-
-    private static void VerifyNoOverlappingEmail(string email, IEnumerable<string> otherEmailAddreses)
-    {
-        bool hasOverlap = otherEmailAddreses
-            .Any(otherEmail => otherEmail.Equals(email, StringComparison.OrdinalIgnoreCase));
-
-        if (hasOverlap)
-            throw new InvalidCustomerDataException($"The provided email address '{email}' is already in use by another customer.");
     }
 }

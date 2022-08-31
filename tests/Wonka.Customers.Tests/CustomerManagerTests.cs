@@ -1,5 +1,6 @@
 using Moq;
 using Wonka.Customers.Email;
+using Wonka.Customers.Validators;
 using Wonka.Database;
 using Wonka.Models;
 using Xunit;
@@ -10,6 +11,7 @@ public class CustomerManagerTests
 {
     private readonly Mock<ICustomersDbAccess> mockDb;
     private readonly Mock<IEmailService> mockEmailService;
+    private readonly Mock<ICustomerValidator> mockValidator;
 
     private readonly CustomerManager sut;
 
@@ -17,9 +19,10 @@ public class CustomerManagerTests
     {
         mockDb = new();
         mockEmailService = new();
-        sut = new(mockDb.Object, mockEmailService.Object);
+        mockValidator = new();
+        sut = new(mockDb.Object, mockEmailService.Object, mockValidator.Object);
     }
-    
+
     [Fact]
     public void GetAllCustomers_ShouldReturnCustomersFromDatabase()
     {
@@ -34,13 +37,36 @@ public class CustomerManagerTests
         Assert.Equal(dbCustomers, customers);
     }
 
+    [Fact]
+    public void GetCustomer_CustomerExists_ShouldReturnCustomer()
+    {
+        // ARRANGE
+        var id = 123;
+        var dbCustomer = new Customer
+        {
+            Id = id,
+            FirstName = "MyNewGuy",
+            LastName = "Silvermansmithbergstein",
+            Age = 20,
+            EmailAddress = "my_name@gmail.com"
+        };
+        mockDb.Setup(db => db.GetCustomer(id)).Returns(dbCustomer);
+
+        // ACT
+        var customer = sut.GetCustomer(id);
+
+        // ASSERT
+        Assert.Equal(dbCustomer, customer);
+        mockDb.Verify(db => db.GetCustomer(id), Times.Once);
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(0)]
     public void GetCustomer_Id_lt_One_ShouldThrow_ArgumentOutOfRangeException(int id)
     {
         // ACT
-        Action testCode = ()  => sut.GetCustomer(id);
+        Action testCode = () => sut.GetCustomer(id);
 
         // ASSERT
         var ex = Assert.Throws<ArgumentOutOfRangeException>(testCode);
@@ -67,30 +93,7 @@ public class CustomerManagerTests
     }
 
     [Fact]
-    public void GetCustomer_CustomerExists_ShouldReturnCustomer()
-    {
-        // ARRANGE
-        var id = 123;
-        var dbCustomer = new Customer
-        {
-            Id = id,
-            FirstName = "MyNewGuy",
-            LastName = "Silvermansmithbergstein",
-            Age = 20,
-            EmailAddress = "my_name@gmail.com"
-        };
-        mockDb.Setup(db => db.GetCustomer(id)).Returns(dbCustomer);
-
-        // ACT
-        var customer = sut.GetCustomer(id);
-
-        // ASSERT
-        Assert.Equal(dbCustomer, customer);
-        mockDb.Verify(db => db.GetCustomer(id), Times.Once);
-    }
-
-    [Fact]
-    public void AddCustomer_IsValid_ShouldAddCustomer_AndSendEmail()
+    public void AddCustomer_ShouldValidate_AddCustomer_AndSendEmail()
     {
         // ARRANGE
         var email = "mickey_mouse@disney.com";
@@ -111,6 +114,8 @@ public class CustomerManagerTests
 
         // ASSERT
         Assert.Equal(customer, result);
+        mockValidator.Verify(v => v.ValidateCustomerDetails(customer), Times.Once);
+        mockValidator.Verify(v => v.ValidateEmailAddress(email, Enumerable.Empty<string>()), Times.Once);
         mockDb.Verify(db => db.AddCustomer(customer), Times.Once);
         mockEmailService.Verify(
             es => es.SendEmail(email, It.Is<string>(body => body.Contains($"{firstName} {lastName}"))),
@@ -118,30 +123,28 @@ public class CustomerManagerTests
     }
 
     [Fact]
-    public void AddCustomer_OverlappingEmail_ShouldThrow_InvalidCustomerDataException()
+    public void UpdateCustomer_Exists_ShouldUpdateInDb()
     {
         // ARRANGE
-        var email = "a_einstein@genius.com";
+        var id = 10;
+        var email = "username@domain.com";
         var customer = new Customer
         {
-            FirstName = "Arik",
-            LastName = "Einstein",
+            Id = id,
             EmailAddress = email,
-            Age = 74,
         };
-        Customer[] existingCustomers =
-        {
-            new Customer { EmailAddress = email }
-        };
-        mockDb.Setup(db => db.GetCustomers()).Returns(existingCustomers);
-        mockDb.Setup(db => db.AddCustomer(customer)).Returns(customer);
+        mockDb.Setup(db => db.GetCustomers()).Returns(new List<Customer> { customer });
+        mockDb.Setup(db => db.GetCustomer(id)).Returns(customer);
+        mockDb.Setup(db => db.UpdateCustomer(id, customer)).Returns(customer);
 
         // ACT
-        void testCode() => sut.AddCustomer(customer);
+        var result = sut.UpdateCustomer(id, customer);
 
         // ASSERT
-        var ex = Assert.Throws<InvalidCustomerDataException>(testCode);
-        Assert.Contains(email, ex.Message);
-        Assert.Contains("in use by another customer", ex.Message);
+        Assert.Equal(customer, result);
+        mockValidator.Verify(v => v.ValidateCustomerDetails(customer), Times.Once);
+        mockValidator.Verify(v => v.ValidateEmailAddress(email, Enumerable.Empty<string>()), Times.Once);
+        mockDb.Verify(db => db.GetCustomers(), Times.Once);
+        mockDb.Verify(db => db.UpdateCustomer(id, customer), Times.Once);
     }
 }

@@ -1,11 +1,13 @@
 ﻿using Wonka.Customers;
 using Wonka.Customers.Email;
+using Wonka.Customers.Validators;
 using Wonka.Database;
 using Wonka.Models;
 
 
 var db = new CustomersDbAccess();
-var manager = new CustomerManager(db, new EmailService());
+var emailService = new EmailService();
+var manager = new CustomerManager(db, emailService, new CustomerValidator(emailService));
 
 var numberOfCustomers = manager.GetAllCustomers().Count();
 Console.WriteLine($"We started off with {numberOfCustomers} customers.");
