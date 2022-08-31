@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="$(AssemblyName).Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Wonka.Database\Wonka.Database.csproj" />
     <ProjectReference Include="..\Wonka.Models\Wonka.Models.csproj" />
   </ItemGroup>
